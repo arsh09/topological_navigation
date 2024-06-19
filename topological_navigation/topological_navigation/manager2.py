@@ -37,6 +37,24 @@ class NoAliasDumper(yaml.SafeDumper):
         return True
 #########################################################################################################
 
+# Yaml custom loader for cases where x,y,z,w 
+# fields in poses are integers instead of floats 
+# due to stringify JSON that removes leading zeros.
+class CustomFloatKeyLoader(yaml.SafeLoader):
+    def __init__(self, stream):
+        super(CustomFloatKeyLoader, self).__init__(stream)
+        self.add_constructor('tag:yaml.org,2002:map', self.construct_mapping)
+
+    def construct_mapping(self, node, deep=False):
+        mapping = super(CustomFloatKeyLoader, self).construct_mapping(node, deep=deep)
+        for key in ['x', 'y', 'z', 'w']:
+            if key in mapping:
+                if isinstance(mapping[key], int):
+                    mapping[key] = float(mapping[key])
+                elif not isinstance(mapping[key], float):
+                    raise ValueError(f"Value for '{key}' must be a float or an integer, got {type(mapping[key]).__name__} instead.")
+        return mapping
+
 
 #########################################################################################################
 class map_manager_2(rclpy.node.Node):
@@ -202,7 +220,7 @@ class map_manager_2(rclpy.node.Node):
         def loader(filename, transporter):
             try:
                 with open(filename, "r") as f:
-                    transporter["tmap2"] = yaml.safe_load(f)
+                    transporter["tmap2"] = yaml.safe_load(f, Loader = CustomFloatKeyLoader)
             except Exception as e:
                 self.get_logger().error(e)
                 transporter["tmap2"] = {}
